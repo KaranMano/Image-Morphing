@@ -1,0 +1,4 @@
+*.edges
+*.vcxproj*
+x64/
+Debug/
