@@ -1,12 +1,14 @@
+#include <glm/glm.hpp>
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
-#include <iostream>
-#include <glm/glm.hpp>
-#include <imgui/imgui.h>
-#include <imgui/imgui_impl_glfw.h>
-#include <imgui/imgui_impl_opengl3.h>
 #include <opencv2/opencv.hpp>
-#include <imgui/imgui_stdlib.h>
+
+#include "imgui/imgui.h"
+#include "imgui/imgui_impl_glfw.h"
+#include "imgui/imgui_impl_opengl3.h"
+#include "imgui/imgui_stdlib.h"
+
+#include <iostream>
 #include <algorithm>
 #include <utility>
 #include <vector>
@@ -20,7 +22,7 @@ public:
 
 	Edge() {};
 	Edge(ImVec2 h) : head(h), drawing(true){};
-	Edge(ImVec2 h, ImVec2 t, bool d) : head(h), tail(t), drawing(true) {};
+	Edge(ImVec2 h, ImVec2 t, bool d) : head(h), tail(t), drawing(d) {};
 
 	void setTail(ImVec2 t) {
 		tail = t;
@@ -112,9 +114,8 @@ void printEdges() {
 void loadImage(cv::Mat &image, std::string &buffer, GLuint &texture, const std::string &title) {
 	ImGui::Begin(title.c_str());
 	ImGui::InputText(("input##" + title).c_str(), &buffer, 512);
+
 	if (ImGui::Button(("submit##" + title).c_str())) {
-		std::cout << "loaded edges\n";
-		printEdges();
 		image = cv::imread(buffer, cv::IMREAD_COLOR);
 		if (!image.empty()) {
 			cv::cvtColor(image, image, cv::COLOR_BGR2RGBA);
@@ -125,11 +126,13 @@ void loadImage(cv::Mat &image, std::string &buffer, GLuint &texture, const std::
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.cols, image.rows, 0, GL_RGBA, GL_UNSIGNED_BYTE, image.data);
 		}
 	}
-	if (ImGui::Button(("clear##" + title).c_str()))
+	
+	if (ImGui::Button(("clear##" + title).c_str())) {
 		if (title == "source path")
 			sourceEdges.clear();
 		else
 			targetEdges.clear();
+	}
 
 	ImGui::End();
 }
@@ -144,20 +147,22 @@ void displayImage(cv::Mat image, GLuint texture, std::string title) {
 	ImGui::Begin(title.c_str());
 	if (!image.empty()) {
 		ImVec2 winSize = ImGui::GetWindowSize();
-		double scaleFactor = std::min(winSize.y/ image.rows, winSize.x/ image.cols);
-		int padding = 10;
-		ImGui::Image(reinterpret_cast<void*>(static_cast<intptr_t>(texture)), ImVec2(image.cols * scaleFactor, image.rows * scaleFactor));
+		double scaleFactor = std::min(winSize.y/ image.rows, winSize.x/ image.cols);	
+		ImGui::Image(reinterpret_cast<void*>(static_cast<intptr_t>(texture)),
+				ImVec2(image.cols * scaleFactor, image.rows * scaleFactor));
 		ImVec2 topLeft = ImGui::GetItemRectMin(), bottomRight = ImGui::GetItemRectMax();
-		
 		
 		if (editHandle) {
 			ImGui::GetWindowDrawList()->AddRect(topLeft, bottomRight, IM_COL32(255, 0, 0, 255), 0, 0, 5);
 			if (ImGui::IsItemClicked()){
 				ImVec2 mousePos = ImGui::GetMousePos();
 				if (edges->size() > 0 && edges->back().drawing)
-					edges->back().setTail(ImVec2((mousePos.x - topLeft.x) / scaleFactor, (mousePos.y - topLeft.y) / scaleFactor));
+					edges->back()
+						.setTail(ImVec2((mousePos.x - topLeft.x) / scaleFactor, (mousePos.y - topLeft.y) / scaleFactor));
 				else
-					edges->push_back(Edge(ImVec2((mousePos.x - topLeft.x) / scaleFactor, (mousePos.y - topLeft.y) / scaleFactor)));
+					edges->push_back(
+							Edge(ImVec2((mousePos.x - topLeft.x) / scaleFactor, (mousePos.y - topLeft.y) / scaleFactor))
+					);
 				
 			}
 		}
@@ -226,6 +231,7 @@ int main() {
 	glGenTextures(1, &targetTexture);
 
 	readEdges();
+
 	while (!glfwWindowShouldClose(window)){
 
 		glfwPollEvents();

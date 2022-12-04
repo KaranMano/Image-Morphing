@@ -1,4 +1,9 @@
-*.edges
-*.vcxproj*
 x64/
 Debug/
+Dependencies/*
+.vs/
+
+image-morphing/*.edges
+image-morphing/*.vcxproj.user
+image-morphing/x64/
+image-morphing/Debug/
