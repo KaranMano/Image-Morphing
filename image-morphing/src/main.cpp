@@ -14,6 +14,8 @@
 #include <vector>
 #include <fstream>
 
+using namespace glm;
+
 class Edge {
 public:
 	ImVec2 head;
@@ -195,6 +197,35 @@ void displayImage(cv::Mat image, GLuint texture, std::string title) {
 	ImGui::End();
 }
 
+void generateMorph(cv::Mat srcImg, cv::Mat tarImg) {
+	std::cout << "generating morph\n";
+	cv::Mat morphImg(tarImg.cols, tarImg.rows, tarImg.type(), cv::Scalar(0, 0, 0));
+	for (int j = 0; j < tarImg.rows; j++) {
+		for (int i = 0; i < tarImg.cols; i++) {
+			// for each pixel (i, j)
+			vec3 X = vec3(i, j, 0);
+			vec3 P = vec3(trunc(targetEdges[0].head.x), trunc(targetEdges[0].head.y), 0);
+			vec3 Q = vec3(trunc(targetEdges[0].tail.x), trunc(targetEdges[0].tail.y), 0);
+			vec3 P1 = vec3(trunc(sourceEdges[0].head.x), trunc(sourceEdges[0].head.y), 0);
+			vec3 Q1 = vec3(trunc(sourceEdges[0].tail.x), trunc(sourceEdges[0].tail.y), 0);
+
+			float u = dot((X - P), (Q - P)) / (length(Q - P) * length(Q - P));
+			float v = dot((X - P), cross((Q - P), vec3(0, 0, 1))) / length(Q - P);
+
+			vec3 X1 = P1 + u * (Q1 - P1) + (v * cross((Q1 - P1), vec3(0, 0, 1))) / length(Q1 - P1);
+
+			std::cout << "iteration " << i << " " << j << std::endl;
+			if (X1.x >= srcImg.rows || X1.y >= srcImg.cols || X1.x < 0 || X1.y < 0) {
+				std::cout << "sample idx out of range\n";
+				continue;
+			}
+			std::cout << "sample idx in range :)\n";
+			morphImg.at<cv::Vec3b>(i, j) = srcImg.at<cv::Vec3b>(trunc(X1.x), trunc(X1.y));
+		}
+	}
+	imwrite("morph.png", morphImg);
+}
+
 int main() {
 	if (!glfwInit())
 		return -1;
@@ -249,6 +280,12 @@ int main() {
 
 		loadImage(targetImage, targetPathBuffer, targetTexture, "target path");
 		displayImage(targetImage, targetTexture, "target image");
+
+		ImGui::Begin("Start Morphing");
+		if (ImGui::Button("Morph")) {
+			generateMorph(sourceImage, targetImage);
+		}
+		ImGui::End();
 
 		if (ImGui::IsKeyPressed(ImGuiKey_G))
 			editHandle = !editHandle;
