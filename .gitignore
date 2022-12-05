@@ -7,3 +7,6 @@ image-morphing/*.edges
 image-morphing/*.vcxproj.user
 image-morphing/x64/
 image-morphing/Debug/
+image-morphing/*.jpeg
+image-morphing/*.jpg
+image-morphing/*.png
