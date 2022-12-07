@@ -1,4 +1,5 @@
 #include <glm/glm.hpp>
+#include <glm/gtx/norm.hpp>
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <opencv2/opencv.hpp>
@@ -13,6 +14,7 @@
 #include <utility>
 #include <vector>
 #include <fstream>
+#include <cmath>
 
 using namespace glm;
 
@@ -37,6 +39,7 @@ std::vector<Edge> sourceEdges;
 std::vector<Edge> targetEdges;
 
 void writeEdges(std::string sourcePath, std::string targetPath) {
+	std::cout << "writing edges\n";
 	std::ofstream sourceLog("./source.edges");
 	std::ofstream targetLog("./target.edges");
 	
@@ -58,11 +61,11 @@ void writeEdges(std::string sourcePath, std::string targetPath) {
 }
 
 void readEdges() {
+	std::cout << "reading edges\n";
 	std::ifstream sourceLog("./source.edges");
 	std::ifstream targetLog("./target.edges");
 
 	if (sourceLog.good()) {
-		std::cout << "source edges:\n";
 		while (!sourceLog.eof()) {
 			Edge currEdge;
 			sourceLog >> currEdge.head.x
@@ -77,7 +80,6 @@ void readEdges() {
 	
 
 	if (targetLog.good()) {
-		std::cout << "target edges:\n";
 		while (!targetLog.eof()) {
 			Edge currEdge;
 			targetLog >> currEdge.head.x
@@ -126,6 +128,7 @@ void loadImage(cv::Mat &image, std::string &buffer, GLuint &texture, const std::
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 			glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.cols, image.rows, 0, GL_RGBA, GL_UNSIGNED_BYTE, image.data);
+			cv::cvtColor(image, image, cv::COLOR_RGBA2BGR);
 		}
 	}
 	
@@ -160,17 +163,19 @@ void displayImage(cv::Mat image, GLuint texture, std::string title) {
 				ImVec2 mousePos = ImGui::GetMousePos();
 				if (edges->size() > 0 && edges->back().drawing)
 					edges->back()
-						.setTail(ImVec2((mousePos.x - topLeft.x) / scaleFactor, (mousePos.y - topLeft.y) / scaleFactor));
+						.setTail(ImVec2(std::trunc((mousePos.x - topLeft.x) / scaleFactor),
+							std::trunc((mousePos.y - topLeft.y) / scaleFactor)));
 				else
 					edges->push_back(
-							Edge(ImVec2((mousePos.x - topLeft.x) / scaleFactor, (mousePos.y - topLeft.y) / scaleFactor))
+							Edge(ImVec2(std::trunc((mousePos.x - topLeft.x) / scaleFactor),
+								std::trunc((mousePos.y - topLeft.y) / scaleFactor)))
 					);
 				
 			}
 		}
 		
 		for (int i = 0; i < edges->size(); i++) {
-			ImVec2 head = ImVec2((*edges)[i].head.x*scaleFactor + topLeft.x, (*edges)[i].head.y*scaleFactor + topLeft.y);
+			ImVec2 head = ImVec2((*edges)[i].head.x * scaleFactor + topLeft.x, (*edges)[i].head.y * scaleFactor + topLeft.y);
 			ImVec2 tail;
 
 			if ((*edges)[i].drawing) {
@@ -197,33 +202,63 @@ void displayImage(cv::Mat image, GLuint texture, std::string title) {
 	ImGui::End();
 }
 
-void generateMorph(cv::Mat srcImg, cv::Mat tarImg) {
-	std::cout << "generating morph\n";
-	cv::Mat morphImg(tarImg.cols, tarImg.rows, tarImg.type(), cv::Scalar(0, 0, 0));
-	for (int j = 0; j < tarImg.rows; j++) {
-		for (int i = 0; i < tarImg.cols; i++) {
-			// for each pixel (i, j)
-			vec3 X = vec3(i, j, 0);
-			vec3 P = vec3(trunc(targetEdges[0].head.x), trunc(targetEdges[0].head.y), 0);
-			vec3 Q = vec3(trunc(targetEdges[0].tail.x), trunc(targetEdges[0].tail.y), 0);
-			vec3 P1 = vec3(trunc(sourceEdges[0].head.x), trunc(sourceEdges[0].head.y), 0);
-			vec3 Q1 = vec3(trunc(sourceEdges[0].tail.x), trunc(sourceEdges[0].tail.y), 0);
+cv::Point2d perp(const cv::Point2d &v) {
+	cv::Point3d planePerp(0, 0, 1);
+	cv::Point3d p = cv::Point3d(v.x, v.y, 0).cross(planePerp);
+	return cv::Point2d(p.x, p.y);
+}
 
-			float u = dot((X - P), (Q - P)) / (length(Q - P) * length(Q - P));
-			float v = dot((X - P), cross((Q - P), vec3(0, 0, 1))) / length(Q - P);
+void clampToImage(cv::Point2d &p, const cv::Mat &image) {
+	p.x = std::clamp((int)p.x, 0, image.cols - 1);
+	p.y = std::clamp((int)p.y, 0, image.rows - 1);
+}
 
-			vec3 X1 = P1 + u * (Q1 - P1) + (v * cross((Q1 - P1), vec3(0, 0, 1))) / length(Q1 - P1);
+cv::Point2d convToPoint2d(const ImVec2 &p) {
+	return cv::Point2d(p.x, p.y);
+}
 
-			std::cout << "iteration " << i << " " << j << std::endl;
-			if (X1.x >= srcImg.rows || X1.y >= srcImg.cols || X1.x < 0 || X1.y < 0) {
-				std::cout << "sample idx out of range\n";
-				continue;
+void generateMorph(cv::Mat sourceImage, cv::Mat targetImage) {
+	std::cout << "morphing\n";
+	cv::Mat destImage(sourceImage.rows, sourceImage.cols, sourceImage.type(), cv::Scalar(0, 0, 0));
+	double a = 10, b = 1, p = 1;
+
+	for (int col = 0; col < targetImage.cols; col++) {
+		for (int row = 0; row < targetImage.rows; row++) {
+			cv::Point2d destX(col, row);
+			cv::Point2d dispSum(0, 0);
+			double weightSum = 0;
+
+			for (int i = 0; i < targetEdges.size(); i++) {
+				cv::Point2d destP = convToPoint2d(targetEdges[i].head);	
+				cv::Point2d destQ = convToPoint2d(targetEdges[i].tail);
+				cv::Point2d sourceP = convToPoint2d(sourceEdges[i].head);
+				cv::Point2d sourceQ = convToPoint2d(sourceEdges[i].tail);
+
+				float u = (destX - destP).dot(destQ - destP) / (cv::norm(destQ - destP) * cv::norm(destQ - destP));
+				float v = (destX - destP).dot(perp(destQ - destP)) / cv::norm(destQ - destP);
+
+				cv::Point2d sourceX = sourceP + u * (sourceQ - sourceP) + (v * perp(sourceQ - sourceP)) / cv::norm(sourceQ - sourceP);
+				cv::Point2d disp = sourceX - destX;
+
+				double dist = 0;
+				if (u >= 1)
+					dist = cv::norm(destX - destQ);
+				else if (u <= 0)
+					dist = cv::norm(destX - destP);
+				else
+					dist = std::abs(v);
+
+				double weight = std::pow(std::pow(cv::norm(destQ - destP), p) / (a + dist), b);
+
+				weightSum += weight;
+				dispSum += disp * weight;
 			}
-			std::cout << "sample idx in range :)\n";
-			morphImg.at<cv::Vec3b>(i, j) = srcImg.at<cv::Vec3b>(trunc(X1.x), trunc(X1.y));
+			cv::Point2d finalX = destX + dispSum / weightSum;
+			clampToImage(finalX, sourceImage);	
+			destImage.at<cv::Vec3b>(destX) = sourceImage.at<cv::Vec3b>(std::trunc(finalX.y), std::trunc(finalX.x));
 		}
 	}
-	imwrite("morph.png", morphImg);
+	imwrite("./morph.png", destImage);
 }
 
 int main() {
@@ -263,6 +298,8 @@ int main() {
 
 	readEdges();
 
+	sourcePathBuffer = "./source.jpeg";
+	targetPathBuffer = "./target.jpeg";
 	while (!glfwWindowShouldClose(window)){
 
 		glfwPollEvents();
