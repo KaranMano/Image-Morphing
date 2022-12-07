@@ -2,6 +2,7 @@ x64/
 Debug/
 Dependencies/*
 .vs/
+enc_temp_folder/
 
 image-morphing/*.edges
 image-morphing/*.vcxproj.user
