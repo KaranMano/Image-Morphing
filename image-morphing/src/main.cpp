@@ -316,8 +316,10 @@ int main() {
 			ImGui::End();
 		}
 
-		if (reloadMorphed == true) 
+		if (reloadMorphed == true) {
 			loadImage(morphedImage, morphedTexture, "./morph.png");
+			reloadMorphed = false;
+		}
 
 		{
 			ImGui::Begin("Result");
