@@ -207,7 +207,11 @@ void clampToImage(cv::Point2d &p, const cv::Mat &image) {
 	p.y = std::clamp((int)p.y, 0, image.rows - 1);
 }
 
-void generateMorph(cv::Mat sourceImage, cv::Mat targetImage) {
+inline cv::Point2d generateIntermediatePoint(const cv::Point2d &source, const cv::Point2d &dest, const double &step) {
+	return (dest - source) * step + source;
+}
+
+void generateMorph(cv::Mat sourceImage, cv::Mat targetImage, const double &step) {
 	cv::Mat destImage(sourceImage.rows, sourceImage.cols, sourceImage.type(), cv::Scalar(0, 0, 0));
 	double a = 10, b = 1.5, p = 0.2;
 
@@ -222,6 +226,9 @@ void generateMorph(cv::Mat sourceImage, cv::Mat targetImage) {
 				cv::Point2d destQ = convToPoint2d(targetEdges[i].tail);
 				cv::Point2d sourceP = convToPoint2d(sourceEdges[i].head);
 				cv::Point2d sourceQ = convToPoint2d(sourceEdges[i].tail);
+
+				destP = generateIntermediatePoint(sourceP, destP, step);
+				destQ = generateIntermediatePoint(sourceQ, destQ, step);
 
 				float u = (destX - destP).dot(destQ - destP) / (cv::norm(destQ - destP) * cv::norm(destQ - destP));
 				float v = (destX - destP).dot(perp(destQ - destP)) / cv::norm(destQ - destP);
@@ -247,7 +254,8 @@ void generateMorph(cv::Mat sourceImage, cv::Mat targetImage) {
 			destImage.at<cv::Vec3b>(destX) = sourceImage.at<cv::Vec3b>(std::trunc(finalX.y), std::trunc(finalX.x));
 		}
 	}
-	imwrite("./morph.png", destImage);
+	std::string path = "./morph" + std::to_string(step) + ".png";
+	imwrite(path, destImage);
 	reloadMorphed = true;
 }
 
@@ -300,6 +308,7 @@ int main() {
 		loadImageWindow(targetImage, targetPathBuffer, targetTexture, "target path");
 		displayImage(targetImage, targetTexture, "target image");
 
+		int steps = 3;
 		{
 			ImGui::Begin("Options");
 
@@ -307,7 +316,8 @@ int main() {
 			ImGui::Text("target edges: %i", targetEdges.size());
 
 			if (ImGui::Button("Morph"))
-				generateMorph(sourceImage, targetImage);
+				for (int step = 0; step < steps; step++)
+					generateMorph(sourceImage, targetImage, (double)(step + 1) / steps);
 			if (ImGui::Button("Load"))
 				readEdges();
 			if (ImGui::Button("Save"))
@@ -317,7 +327,7 @@ int main() {
 		}
 
 		if (reloadMorphed == true) {
-			loadImage(morphedImage, morphedTexture, "./morph.png");
+			loadImage(morphedImage, morphedTexture, "./morph1.000000.png");
 			reloadMorphed = false;
 		}
 
