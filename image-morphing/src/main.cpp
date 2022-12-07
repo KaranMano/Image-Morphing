@@ -1,5 +1,3 @@
-#include <glm/glm.hpp>
-#include <glm/gtx/norm.hpp>
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <opencv2/opencv.hpp>
@@ -16,8 +14,6 @@
 #include <fstream>
 #include <cmath>
 
-using namespace glm;
-
 class Edge {
 public:
 	ImVec2 head;
@@ -25,67 +21,80 @@ public:
 	bool drawing;
 
 	Edge() {};
-	Edge(ImVec2 h) : head(h), drawing(true){};
-	Edge(ImVec2 h, ImVec2 t, bool d) : head(h), tail(t), drawing(d) {};
+	Edge(ImVec2 t) : tail(t), drawing(true) {};
+	Edge(ImVec2 t, ImVec2 h, bool d) : tail(t), head(h), drawing(d) {};
 
-	void setTail(ImVec2 t) {
-		tail = t;
+	void setHead(ImVec2 t) {
+		head = t;
 		drawing = false;
 	}
 };
 
-bool editHandle = false;
+bool editHandle = false, reloadMorphed = false;
 std::vector<Edge> sourceEdges;
 std::vector<Edge> targetEdges;
 
+cv::Point2d perp(const cv::Point2d &v) {
+	cv::Point3d planePerp(0, 0, 1);
+	cv::Point3d p = cv::Point3d(v.x, v.y, 0).cross(planePerp);
+	return cv::Point2d(p.x, p.y);
+}
+
+cv::Point2d convToPoint2d(const ImVec2 &p) {
+	return cv::Point2d(p.x, p.y);
+}
+
+ImVec2 convToImVec2(const cv::Point2d &p) {
+	return ImVec2(p.x, p.y);
+}
+
 void writeEdges(std::string sourcePath, std::string targetPath) {
-	std::cout << "writing edges\n";
 	std::ofstream sourceLog("./source.edges");
 	std::ofstream targetLog("./target.edges");
-	
-	for (auto edge : sourceEdges) {
-		sourceLog << edge.head.x << " "
-			<< edge.head.y << " "
-			<< edge.tail.x << " "
+
+	for (const auto &edge : sourceEdges) {
+		sourceLog << edge.tail.x << " "
 			<< edge.tail.y << " "
+			<< edge.head.x << " "
+			<< edge.head.y << " "
 			<< edge.drawing << std::endl;
 	}
 
-	for (auto edge : targetEdges) {
-		targetLog << edge.head.x << " "
-			<< edge.head.y << " "
-			<< edge.tail.x << " "
+	for (const auto &edge : targetEdges) {
+		targetLog << edge.tail.x << " "
 			<< edge.tail.y << " "
+			<< edge.head.x << " "
+			<< edge.head.y << " "
 			<< edge.drawing << std::endl;
 	}
 }
 
 void readEdges() {
-	std::cout << "reading edges\n";
+	targetEdges.clear();
+	sourceEdges.clear();
 	std::ifstream sourceLog("./source.edges");
 	std::ifstream targetLog("./target.edges");
 
 	if (sourceLog.good()) {
 		while (!sourceLog.eof()) {
 			Edge currEdge;
-			sourceLog >> currEdge.head.x
-				>> currEdge.head.y
-				>> currEdge.tail.x
+			sourceLog >> currEdge.tail.x
 				>> currEdge.tail.y
+				>> currEdge.head.x
+				>> currEdge.head.y
 				>> currEdge.drawing;
 			if (!sourceLog.eof())
 				sourceEdges.push_back(currEdge);
 		}
 	}
-	
 
 	if (targetLog.good()) {
 		while (!targetLog.eof()) {
 			Edge currEdge;
-			targetLog >> currEdge.head.x
-				>> currEdge.head.y
-				>> currEdge.tail.x
+			targetLog >> currEdge.tail.x
 				>> currEdge.tail.y
+				>> currEdge.head.x
+				>> currEdge.head.y
 				>> currEdge.drawing;
 			if (!targetLog.eof())
 				targetEdges.push_back(currEdge);
@@ -97,115 +106,100 @@ void readEdges() {
 void printEdges() {
 
 	std::cout << sourceEdges.size() << "\n";
-	for (auto edge : sourceEdges) {
-		std::cout << edge.head.x << " "
-			<< edge.head.y << " "
-			<< edge.tail.x << " "
+	for (const auto &edge : sourceEdges) {
+		std::cout << edge.tail.x << " "
 			<< edge.tail.y << " "
+			<< edge.head.x << " "
+			<< edge.head.y << " "
 			<< edge.drawing << std::endl;
 	}
 
 	std::cout << targetEdges.size() << "\n";
-	for (auto edge : targetEdges) {
-		std::cout << edge.head.x << " "
-			<< edge.head.y << " "
-			<< edge.tail.x << " "
+	for (const auto &edge : targetEdges) {
+		std::cout << edge.tail.x << " "
 			<< edge.tail.y << " "
+			<< edge.head.x << " "
+			<< edge.head.y << " "
 			<< edge.drawing << std::endl;
 	}
 }
 
-void loadImage(cv::Mat &image, std::string &buffer, GLuint &texture, const std::string &title) {
+void loadImage(cv::Mat &image, GLuint &texture, const std::string &path) {
+	image = cv::imread(path, cv::IMREAD_COLOR);
+	if (!image.empty()) {
+		cv::cvtColor(image, image, cv::COLOR_BGR2RGBA);
+		glBindTexture(GL_TEXTURE_2D, texture);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.cols, image.rows, 0, GL_RGBA, GL_UNSIGNED_BYTE, image.data);
+		cv::cvtColor(image, image, cv::COLOR_RGBA2BGR);
+	}
+}
+
+void loadImageWindow(cv::Mat &image, std::string &buffer, GLuint &texture, const std::string &title) {
 	ImGui::Begin(title.c_str());
-	ImGui::InputText(("input##" + title).c_str(), &buffer, 512);
+	ImGui::InputText(("input##" + title).c_str(), &buffer);
 
-	if (ImGui::Button(("submit##" + title).c_str())) {
-		image = cv::imread(buffer, cv::IMREAD_COLOR);
-		if (!image.empty()) {
-			cv::cvtColor(image, image, cv::COLOR_BGR2RGBA);
-			glBindTexture(GL_TEXTURE_2D, texture);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.cols, image.rows, 0, GL_RGBA, GL_UNSIGNED_BYTE, image.data);
-			cv::cvtColor(image, image, cv::COLOR_RGBA2BGR);
-		}
-	}
-	
-	if (ImGui::Button(("clear##" + title).c_str())) {
-		if (title == "source path")
-			sourceEdges.clear();
-		else
-			targetEdges.clear();
-	}
-
+	if (ImGui::Button(("submit##" + title).c_str()))
+		loadImage(image, texture, buffer);
+	if (ImGui::Button(("clear##" + title).c_str()))
+		(title == "source path") ? sourceEdges.clear() : targetEdges.clear();
 	ImGui::End();
 }
 
 void displayImage(cv::Mat image, GLuint texture, std::string title) {
 	std::vector<Edge> *edges = nullptr;
-	if (title == "source image")
-		edges = &sourceEdges;
-	else
-		edges = &targetEdges;
+	edges = (title == "source image") ? &sourceEdges : &targetEdges;
 
 	ImGui::Begin(title.c_str());
 	if (!image.empty()) {
-		ImVec2 winSize = ImGui::GetWindowSize();
-		double scaleFactor = std::min(winSize.y/ image.rows, winSize.x/ image.cols);	
-		ImGui::Image(reinterpret_cast<void*>(static_cast<intptr_t>(texture)),
-				ImVec2(image.cols * scaleFactor, image.rows * scaleFactor));
+		ImVec2 winSize = ImGui::GetWindowSize();	// store in variable to ensure usage of same window size
+		double scaleFactor = std::min(winSize.y / image.rows, winSize.x / image.cols);
+		ImGui::Image(
+			reinterpret_cast<void*>(static_cast<intptr_t>(texture)),
+			ImVec2(image.cols * scaleFactor, image.rows * scaleFactor)
+		);
 		ImVec2 topLeft = ImGui::GetItemRectMin(), bottomRight = ImGui::GetItemRectMax();
-		
+
 		if (editHandle) {
 			ImGui::GetWindowDrawList()->AddRect(topLeft, bottomRight, IM_COL32(255, 0, 0, 255), 0, 0, 5);
-			if (ImGui::IsItemClicked()){
+			if (ImGui::IsItemClicked()) {
 				ImVec2 mousePos = ImGui::GetMousePos();
+				ImVec2 clickPos = ImVec2(
+					std::trunc((mousePos.x - topLeft.x) / scaleFactor),
+					std::trunc((mousePos.y - topLeft.y) / scaleFactor)
+				);
 				if (edges->size() > 0 && edges->back().drawing)
-					edges->back()
-						.setTail(ImVec2(std::trunc((mousePos.x - topLeft.x) / scaleFactor),
-							std::trunc((mousePos.y - topLeft.y) / scaleFactor)));
+					edges->back().setHead(clickPos);
 				else
-					edges->push_back(
-							Edge(ImVec2(std::trunc((mousePos.x - topLeft.x) / scaleFactor),
-								std::trunc((mousePos.y - topLeft.y) / scaleFactor)))
-					);
-				
+					edges->push_back(Edge(clickPos));
 			}
 		}
-		
-		for (int i = 0; i < edges->size(); i++) {
-			ImVec2 head = ImVec2((*edges)[i].head.x * scaleFactor + topLeft.x, (*edges)[i].head.y * scaleFactor + topLeft.y);
-			ImVec2 tail;
 
-			if ((*edges)[i].drawing) {
-				ImGui::GetWindowDrawList()->AddLine(head, ImGui::GetMousePos(), IM_COL32(255, 0, 0, 255), 2);
-			}
-			else {
-				tail = ImVec2((*edges)[i].tail.x*scaleFactor + topLeft.x, (*edges)[i].tail.y*scaleFactor + topLeft.y);
-				
-				ImGui::SetCursorPos(ImVec2(tail.x - ImGui::GetWindowPos().x, tail.y - ImGui::GetWindowPos().y));
-				ImGui::PushID(i);
-				ImGui::Button("##tail", ImVec2(10, 10));
-				ImGui::PopID();
-				
-				ImGui::GetWindowDrawList()->AddLine(head, tail, IM_COL32(255, 0, 0, 255), 2);
-			}
+		for (auto &edge : *edges) {
+			ImVec2 tail = ImVec2(edge.tail.x * scaleFactor + topLeft.x, edge.tail.y * scaleFactor + topLeft.y);
+			ImVec2 head = (edge.drawing) ?
+				ImGui::GetMousePos()
+				:
+				ImVec2(edge.head.x * scaleFactor + topLeft.x, edge.head.y * scaleFactor + topLeft.y);
 
-			// ImGui::SetCursorPos(ImVec2(head.x - ImGui::GetWindowPos().x, head.y - ImGui::GetWindowPos().y));
-			// ImGui::PushID(i);
-			// ImGui::Button("##head", ImVec2(10, 10));
-			// ImGui::PopID();
+			int height = 10, width = 5;
+			cv::Point2d h = convToPoint2d(head);
+			cv::Point2d t = convToPoint2d(tail);
+			cv::Point2d line = (t - h) / cv::norm(h - t);
+			cv::Point2d linePerp = perp(line);
 
+			ImGui::GetWindowDrawList()->AddTriangleFilled(	// arrowhead
+				convToImVec2(h),
+				convToImVec2(h + line * height + linePerp * width),
+				convToImVec2(h + line * height - linePerp * width),
+				IM_COL32(255, 0, 0, 255));
+
+			ImGui::GetWindowDrawList()->AddLine(tail, convToImVec2(h + line * 10), IM_COL32(255, 0, 0, 255), 2);
 		}
 	}
 	ImGui::End();
-}
-
-cv::Point2d perp(const cv::Point2d &v) {
-	cv::Point3d planePerp(0, 0, 1);
-	cv::Point3d p = cv::Point3d(v.x, v.y, 0).cross(planePerp);
-	return cv::Point2d(p.x, p.y);
 }
 
 void clampToImage(cv::Point2d &p, const cv::Mat &image) {
@@ -213,12 +207,7 @@ void clampToImage(cv::Point2d &p, const cv::Mat &image) {
 	p.y = std::clamp((int)p.y, 0, image.rows - 1);
 }
 
-cv::Point2d convToPoint2d(const ImVec2 &p) {
-	return cv::Point2d(p.x, p.y);
-}
-
 void generateMorph(cv::Mat sourceImage, cv::Mat targetImage) {
-	std::cout << "morphing\n";
 	cv::Mat destImage(sourceImage.rows, sourceImage.cols, sourceImage.type(), cv::Scalar(0, 0, 0));
 	double a = 10, b = 1, p = 0.8;
 
@@ -229,7 +218,7 @@ void generateMorph(cv::Mat sourceImage, cv::Mat targetImage) {
 			double weightSum = 0;
 
 			for (int i = 0; i < targetEdges.size(); i++) {
-				cv::Point2d destP = convToPoint2d(targetEdges[i].head);	
+				cv::Point2d destP = convToPoint2d(targetEdges[i].head);
 				cv::Point2d destQ = convToPoint2d(targetEdges[i].tail);
 				cv::Point2d sourceP = convToPoint2d(sourceEdges[i].head);
 				cv::Point2d sourceQ = convToPoint2d(sourceEdges[i].tail);
@@ -254,11 +243,12 @@ void generateMorph(cv::Mat sourceImage, cv::Mat targetImage) {
 				dispSum += disp * weight;
 			}
 			cv::Point2d finalX = destX + dispSum / weightSum;
-			clampToImage(finalX, sourceImage);	
+			clampToImage(finalX, sourceImage);
 			destImage.at<cv::Vec3b>(destX) = sourceImage.at<cv::Vec3b>(std::trunc(finalX.y), std::trunc(finalX.x));
 		}
 	}
 	imwrite("./morph.png", destImage);
+	reloadMorphed = true;
 }
 
 int main() {
@@ -288,19 +278,13 @@ int main() {
 	ImGui_ImplOpenGL3_Init(glsl_version);
 
 	std::string sourcePathBuffer, targetPathBuffer;
-	cv::Mat sourceImage, targetImage;
-	sourcePathBuffer.reserve(512);
-	targetPathBuffer.reserve(512);
+	cv::Mat sourceImage, targetImage, morphedImage;
 
-	GLuint sourceTexture, targetTexture;
+	GLuint sourceTexture, targetTexture, morphedTexture;
 	glGenTextures(1, &sourceTexture);
 	glGenTextures(1, &targetTexture);
 
-	readEdges();
-
-	sourcePathBuffer = "./source.jpeg";
-	targetPathBuffer = "./target.jpeg";
-	while (!glfwWindowShouldClose(window)){
+	while (!glfwWindowShouldClose(window)) {
 
 		glfwPollEvents();
 
@@ -309,20 +293,44 @@ int main() {
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
 		ImGui::DockSpaceOverViewport();
-		
-		// ImGui::ShowDemoWindow();
 
-		loadImage(sourceImage, sourcePathBuffer, sourceTexture, "source path");
+		loadImageWindow(sourceImage, sourcePathBuffer, sourceTexture, "source path");
 		displayImage(sourceImage, sourceTexture, "source image");
 
-		loadImage(targetImage, targetPathBuffer, targetTexture, "target path");
+		loadImageWindow(targetImage, targetPathBuffer, targetTexture, "target path");
 		displayImage(targetImage, targetTexture, "target image");
 
-		ImGui::Begin("Start Morphing");
-		if (ImGui::Button("Morph")) {
-			generateMorph(sourceImage, targetImage);
+		{
+			ImGui::Begin("Options");
+
+			ImGui::Text("source edges: %i", sourceEdges.size());
+			ImGui::Text("target edges: %i", targetEdges.size());
+
+			if (ImGui::Button("Morph"))
+				generateMorph(sourceImage, targetImage);
+			if (ImGui::Button("Load"))
+				readEdges();
+			if (ImGui::Button("Save"))
+				writeEdges(sourcePathBuffer, targetPathBuffer);
+
+			ImGui::End();
 		}
-		ImGui::End();
+
+		if (reloadMorphed == true) 
+			loadImage(morphedImage, morphedTexture, "./morph.png");
+
+		{
+			ImGui::Begin("Result");
+			if (!morphedImage.empty()) {
+				ImVec2 winSize = ImGui::GetWindowSize();
+				double scaleFactor = std::min(winSize.y / morphedImage.rows, winSize.x / morphedImage.cols);
+				ImGui::Image(
+					reinterpret_cast<void*>(static_cast<intptr_t>(morphedTexture)),
+					ImVec2(morphedImage.cols * scaleFactor, morphedImage.rows * scaleFactor)
+				);
+			}
+			ImGui::End();
+		}
 
 		if (ImGui::IsKeyPressed(ImGuiKey_G))
 			editHandle = !editHandle;
@@ -337,10 +345,6 @@ int main() {
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 		glfwSwapBuffers(window);
 	}
-
-	writeEdges(sourcePathBuffer, targetPathBuffer);
-
 	glfwTerminate();
-
 	return 0;
 }
