@@ -192,10 +192,10 @@ void displayImage(cv::Mat image, GLuint texture, std::string title) {
 				ImGui::GetWindowDrawList()->AddLine(head, tail, IM_COL32(255, 0, 0, 255), 2);
 			}
 
-			ImGui::SetCursorPos(ImVec2(head.x - ImGui::GetWindowPos().x, head.y - ImGui::GetWindowPos().y));
-			ImGui::PushID(i);
-			ImGui::Button("##head", ImVec2(10, 10));
-			ImGui::PopID();
+			// ImGui::SetCursorPos(ImVec2(head.x - ImGui::GetWindowPos().x, head.y - ImGui::GetWindowPos().y));
+			// ImGui::PushID(i);
+			// ImGui::Button("##head", ImVec2(10, 10));
+			// ImGui::PopID();
 
 		}
 	}
@@ -310,7 +310,7 @@ int main() {
 		ImGui::NewFrame();
 		ImGui::DockSpaceOverViewport();
 		
-		ImGui::ShowDemoWindow();
+		// ImGui::ShowDemoWindow();
 
 		loadImage(sourceImage, sourcePathBuffer, sourceTexture, "source path");
 		displayImage(sourceImage, sourceTexture, "source image");
