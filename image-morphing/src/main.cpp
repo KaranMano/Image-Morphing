@@ -209,7 +209,7 @@ void clampToImage(cv::Point2d &p, const cv::Mat &image) {
 
 void generateMorph(cv::Mat sourceImage, cv::Mat targetImage) {
 	cv::Mat destImage(sourceImage.rows, sourceImage.cols, sourceImage.type(), cv::Scalar(0, 0, 0));
-	double a = 10, b = 1, p = 0.8;
+	double a = 10, b = 1.5, p = 0.2;
 
 	for (int col = 0; col < targetImage.cols; col++) {
 		for (int row = 0; row < targetImage.rows; row++) {
