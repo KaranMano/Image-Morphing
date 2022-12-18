@@ -13,14 +13,17 @@
 #include <vector>
 #include <fstream>
 #include <cmath>
+#include <thread>
 
 #include "pixel.h"
 #include "edge.h"
 
 
 bool editHandle = false;
+int steps = 3;
 std::vector<Edge> sourceMarkers;
 std::vector<Edge> targetMarkers;
+std::unordered_map<int, cv::Mat> morphedImages;
 std::vector<std::tuple<GLuint, int, int>> morphedTextures;
 
 inline ImVec2 conv(const cv::Point2d &p) {
@@ -214,13 +217,20 @@ cv::Mat morphImage(const cv::Mat &sourceImage,
 	return destImage;
 }
 
-void generateMorph(const cv::Mat &sourceImage, const cv::Mat &targetImage, const double &step) {
-	//! skip first and last iterations simply copy the source and target images
-	cv::Mat sourceMorph = morphImage(targetImage, sourceImage, targetMarkers, sourceMarkers, 1 - step);
-	cv::Mat destMorph = morphImage(sourceImage, targetImage, sourceMarkers, targetMarkers, step);
-	cv::Mat finalMorph = (step)* sourceMorph + (1 - step)* destMorph;
+void generateMorph(const cv::Mat &sourceImage, const cv::Mat &targetImage, const int &step) {
+	cv::Mat finalMorph;
+	if (step == steps)
+		finalMorph = targetImage;
+	else if (step == 0)
+		finalMorph = sourceImage;
+	else {
+		double alpha = (double)step / steps;
+		cv::Mat sourceMorph = morphImage(targetImage, sourceImage, targetMarkers, sourceMarkers, 1 - alpha);
+		cv::Mat destMorph = morphImage(sourceImage, targetImage, sourceMarkers, targetMarkers, alpha);
+		finalMorph = (alpha)* sourceMorph + (1 - alpha)* destMorph;
+	}
 	cv::imwrite("morph" + std::to_string(step) + ".png", finalMorph);
-	morphedTextures.push_back(std::make_tuple(createTexture(finalMorph), finalMorph.cols, finalMorph.rows));
+	morphedImages[step] = finalMorph;
 }
 
 int main() {
@@ -271,7 +281,7 @@ int main() {
 		loadImageWindow(targetImage, targetPathBuffer, targetTexture, "target path");
 		displayImage(targetImage, targetTexture, "target image");
 
-		int steps = 3;
+		int morphPerf = 0;
 		{
 			ImGui::Begin("Options");
 
@@ -279,10 +289,21 @@ int main() {
 			ImGui::Text("target edges: %i", targetMarkers.size());
 
 			if (ImGui::Button("Morph")) {
+				int start = std::time(nullptr);
 				morphedTextures.clear();
-				for (int step = 0; step <= steps; step++)
-					generateMorph(sourceImage, targetImage, (double)step / steps);
+				std::vector<std::thread> morphJobs;
+
+				for (int step = 0; step <= steps; step++) 
+					morphJobs.emplace_back(generateMorph, sourceImage, targetImage, step);
+				for (auto &job : morphJobs)
+					job.join();
+				for (int i = 0; i <=steps; i++)
+					morphedTextures.emplace_back(createTexture(morphedImages[i]), morphedImages[i].cols, morphedImages[i].rows);
+
+				morphedImages.clear();
+				morphPerf = std::time(nullptr) - start;
 			}
+
 			if (ImGui::Button("Load"))
 				readEdges();
 			if (ImGui::Button("Save"))
@@ -293,6 +314,7 @@ int main() {
 
 		{
 			ImGui::Begin("Result");
+			ImGui::Text("Morphing complete in %i", morphPerf);
 			int imageIndex = (std::time(nullptr) - startTime) % (steps + 1);
 			if (imageIndex < morphedTextures.size()) {
 				ImVec2 winSize = ImGui::GetWindowSize();

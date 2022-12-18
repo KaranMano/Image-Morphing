@@ -8,10 +8,10 @@
 class Edge {
 public:
 	Pixel head, tail;
-	bool drawing;
+	bool drawing = true;
 
 	Edge() {};
-	Edge(Pixel t) : tail(t), drawing(true) {};
+	Edge(Pixel t) : tail(t) {};
 	Edge(Pixel t, Pixel h, bool d) : tail(t), head(h), drawing(d) {};
 
 	friend std::ostream& operator<<(std::ostream& os, const Edge &edge) {
