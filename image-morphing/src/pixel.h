@@ -22,60 +22,101 @@ public:
 		return is;
 	}
 
-	Pixel& operator+=(const Pixel& other) {
-		x += other.x;
-		y += other.y;
+	bool operator==(const Pixel& r) const{
+		return x == r.x && y == r.y;
+	}
+	bool operator!=(const Pixel& r) const{
+		return !(*this == r);
+	}
+	Pixel& operator+=(const Pixel& r) {
+		x += r.x;
+		y += r.y;
+		return *this;
 	}
 	Pixel& operator+=(const int& scalar) {
 		x += scalar;
 		y += scalar;
+		return *this;
 	}
-	Pixel& operator-=(const Pixel& other) {
-		x -= other.x;
-		y -= other.y;
+	Pixel& operator-=(const Pixel& r) {
+		x += -r.x;
+		y += -r.y;
+		return *this;
 	}
 	Pixel& operator-=(const int& scalar) {
-		x -= scalar;
-		y -= scalar;
+		x += -scalar;
+		y += -scalar;
+		return *this;
 	}
-	Pixel& operator*=(const Pixel& other) {
-		x *= other.x;
-		y *= other.y;
+	Pixel& operator*=(const Pixel& r) {
+		x *= r.x;
+		y *= r.y;
+		return *this;
 	}
 	Pixel& operator*=(const double& scalar) {
 		x *= scalar;
 		y *= scalar;
+		return *this;
 	}
-	Pixel& operator/=(const Pixel& other) {
-		x /= other.x;
-		y /= other.y;
+	Pixel& operator/=(const Pixel& r) {
+		x *= 1 / r.x;
+		y *= 1 / r.y;
+		return *this;
 	}
 	Pixel& operator/=(const double& scalar) {
-		x /= scalar;
-		y /= scalar;
+		x *= 1 / scalar;
+		y *= 1 / scalar;
+		return *this;
 	}
 
-	friend Pixel operator+(const Pixel& l, const Pixel& r) { return Pixel(l.x + r.x, l.y + r.y); }
-	friend Pixel operator+(const Pixel& l, const double& scalar) { return Pixel(l.x + scalar, l.y + scalar); }
+	Pixel operator+(const Pixel& r) const {
+		Pixel tmp = *this;
+		return (tmp += r);
+	}
+	Pixel operator+(const double& scalar) const {
+		Pixel tmp = *this;
+		return (tmp += scalar);
+	}
 	friend Pixel operator+(const double& scalar, const Pixel& pixel) { return pixel + scalar; }
 
-	friend Pixel operator-(const Pixel& l, const Pixel& r) { return Pixel(l.x - r.x, l.y - r.y); }
-	friend Pixel operator-(const Pixel& l, const double& scalar) { return l + (-scalar); }
+	Pixel operator-() const {
+		return Pixel(-x, -y);
+	}
+	Pixel operator-(const Pixel& r) const {
+		Pixel tmp = *this;
+		return (tmp -= r);
+	}
+	Pixel operator-(const double& scalar) const {
+		Pixel tmp = *this;
+		return (tmp -= scalar);
+	}
 	friend Pixel operator-(const double& scalar, const Pixel& pixel) { return pixel - scalar; }
 
-	friend Pixel operator*(const Pixel& l, const Pixel& r) { return Pixel(l.x * r.x, l.y * r.y); }
-	friend Pixel operator*(const Pixel& l, const double& scalar) { return Pixel(l.x * scalar, l.y * scalar); }
+	Pixel operator*(const Pixel& r) const {
+		Pixel tmp = *this;
+		return (tmp *= r);
+	}
+	Pixel operator*(const double& scalar) const {
+		Pixel tmp = *this;
+		return (tmp *= scalar);
+	}
 	friend Pixel operator*(const double& scalar, const Pixel& pixel) { return pixel * scalar; }
 
-	friend Pixel operator/(const Pixel& l, const Pixel& r) { return Pixel(l.x / r.x, l.y / r.y); }
-	friend Pixel operator/(const Pixel& l, const double& scalar) { return Pixel(l.x / scalar, l.y / scalar); }
+	Pixel operator/(const Pixel& r) const{
+		Pixel tmp = *this;
+		return (tmp /= r);
+	}
+	Pixel operator/(const double& scalar) const{
+		Pixel tmp = *this;
+		return (tmp /= scalar);
+	}
 	friend Pixel operator/(const double& scalar, const Pixel& pixel) { return pixel / scalar; }
 
-	operator ImVec2() const{
+	operator ImVec2() const {
 		return ImVec2(x, y);
 	}
 
-	operator cv::Point2d() const{
+	operator cv::Point2d() const {
 		return cv::Point2d(x, y);
 	}
 };

@@ -13,18 +13,21 @@
 #include <vector>
 #include <fstream>
 #include <cmath>
+#include <future>
 #include <thread>
+#include <chrono>
 
 #include "pixel.h"
 #include "edge.h"
 
+#define FPS 16
 
-bool editHandle = false;
+bool addHandle = false, morphing = false, eraseHandle = false;
 int steps = 3;
-std::vector<Edge> sourceMarkers;
-std::vector<Edge> targetMarkers;
-std::unordered_map<int, cv::Mat> morphedImages;
-std::vector<std::tuple<GLuint, int, int>> morphedTextures;
+std::vector<Edge> sourceMarkers(0);
+std::vector<Edge> targetMarkers(0);
+std::vector<std::tuple<int, int, int>> morphedTextures;
+std::vector<std::future<cv::Mat>> morphJobs(steps + 1);
 
 inline ImVec2 conv(const cv::Point2d &p) {
 	return ImVec2(p.x, p.y);
@@ -123,16 +126,25 @@ void displayImage(cv::Mat image, GLuint texture, std::string title) {
 		);
 		Pixel topLeft = ImGui::GetItemRectMin(), bottomRight = ImGui::GetItemRectMax();
 
-		if (editHandle) {
-			ImGui::GetWindowDrawList()->AddRect(topLeft, bottomRight, IM_COL32(255, 0, 0, 255), 0, 0, 5);
+		if (addHandle) {
+			ImGui::GetWindowDrawList()->AddRect(topLeft, bottomRight, IM_COL32(0, 255, 0, 255), 0, 0, 5);
 			if (ImGui::IsItemClicked()) {
 				Pixel mousePos = ImGui::GetMousePos();
 				Pixel clickPos = (mousePos - topLeft) / scaleFactor;
 				if (edges->size() > 0 && edges->back().drawing)
 					edges->back().setHead(clickPos);
-				else
+				else {
+					if (sourceMarkers.size() > 0 && sourceMarkers.back().drawing)
+						sourceMarkers.pop_back();
+					if (targetMarkers.size() > 0 && targetMarkers.back().drawing)
+						targetMarkers.pop_back();
 					edges->emplace_back(clickPos);
+				}
 			}
+		}
+
+		if (eraseHandle) {
+			ImGui::GetWindowDrawList()->AddRect(topLeft, bottomRight, IM_COL32(255, 0, 0, 255), 0, 0, 5);
 		}
 
 		for (auto &edge : *edges) {
@@ -152,6 +164,40 @@ void displayImage(cv::Mat image, GLuint texture, std::string title) {
 				IM_COL32(255, 0, 0, 255));
 
 			ImGui::GetWindowDrawList()->AddLine(tail, conv(headPoint + line * 10), IM_COL32(255, 0, 0, 255), 2);
+		}
+
+		if (eraseHandle) {
+			for (auto it = edges->begin(); it != edges->end();) {
+				Edge &edge = *it;
+				Pixel tail = edge.tail * scaleFactor + topLeft;
+				Pixel head = edge.head * scaleFactor + topLeft;
+
+				int height = 10, width = 5;
+				cv::Point2d headPoint = head;
+				cv::Point2d tailPoint = tail;
+				cv::Point2d line = (tailPoint - headPoint) / cv::norm(headPoint - tailPoint);
+				cv::Point2d perpLine = perp(line);
+
+				if (ImGui::IsMouseClicked(0)) {
+					Pixel clickPos = ImGui::GetMousePos();
+					cv::Point2d mousePoint = clickPos;
+					if (std::abs((mousePoint - tailPoint).dot(line)) < cv::norm(headPoint - tailPoint)
+						&& std::abs((mousePoint - tailPoint).dot(perpLine)) < width) {
+						if (title == "source image")
+							targetMarkers.erase(targetMarkers.begin() + (int)(it - edges->begin()));
+						else							
+							sourceMarkers.erase(sourceMarkers.begin() + (int)(it - edges->begin()));
+						it = edges->erase(it);
+						std::cout << "erased\n";
+					}
+					else {
+						it++;
+					}
+				}
+				else {
+					it++;
+				}
+			}
 		}
 	}
 	ImGui::End();
@@ -217,7 +263,7 @@ cv::Mat morphImage(const cv::Mat &sourceImage,
 	return destImage;
 }
 
-void generateMorph(const cv::Mat &sourceImage, const cv::Mat &targetImage, const int &step) {
+cv::Mat generateMorph(const cv::Mat &sourceImage, const cv::Mat &targetImage, const int &step) {
 	cv::Mat finalMorph;
 	if (step == steps)
 		finalMorph = targetImage;
@@ -230,7 +276,20 @@ void generateMorph(const cv::Mat &sourceImage, const cv::Mat &targetImage, const
 		finalMorph = (alpha)* sourceMorph + (1 - alpha)* destMorph;
 	}
 	cv::imwrite("morph" + std::to_string(step) + ".png", finalMorph);
-	morphedImages[step] = finalMorph;
+	return finalMorph;
+}
+
+void generateFeatures(cv::Mat &image, int index) {
+	auto fast = cv::FastFeatureDetector::create();
+	fast->setThreshold(30);
+	std::vector<cv::KeyPoint> keypoints;
+	fast->detect(image, keypoints);
+
+	cv::Mat image2; 
+	cv::drawKeypoints(image, keypoints, image2, cv::Scalar(1, 0, 0));
+	std::cout << "threshold" << fast->getThreshold() << std::endl;
+
+	cv::imwrite("features" + std::to_string(index) +".png", image2);
 }
 
 int main() {
@@ -259,12 +318,13 @@ int main() {
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init(glsl_version);
 
-	std::string sourcePathBuffer, targetPathBuffer;
+	std::string sourcePathBuffer = "black.jpeg", targetPathBuffer = "white.jpeg";
 	cv::Mat sourceImage, targetImage, morphedImage;
-	int startTime = std::time(nullptr);
+	using frames = std::chrono::duration<double, std::ratio<1, FPS>>;
+	auto startTime = std::chrono::steady_clock::now();
 
 	GLuint sourceTexture, targetTexture, morphedTexture;
-
+	int morphPerf = 0;
 	while (!glfwWindowShouldClose(window)) {
 
 		glfwPollEvents();
@@ -281,26 +341,21 @@ int main() {
 		loadImageWindow(targetImage, targetPathBuffer, targetTexture, "target path");
 		displayImage(targetImage, targetTexture, "target image");
 
-		int morphPerf = 0;
 		{
 			ImGui::Begin("Options");
 
 			ImGui::Text("source edges: %i", sourceMarkers.size());
 			ImGui::Text("target edges: %i", targetMarkers.size());
 
-			if (ImGui::Button("Morph")) {
+			if (!morphing && ImGui::Button("Morph")) {
 				int start = std::time(nullptr);
+				morphing = true;
 				morphedTextures.clear();
-				std::vector<std::thread> morphJobs;
 
-				for (int step = 0; step <= steps; step++) 
-					morphJobs.emplace_back(generateMorph, sourceImage, targetImage, step);
-				for (auto &job : morphJobs)
-					job.join();
-				for (int i = 0; i <=steps; i++)
-					morphedTextures.emplace_back(createTexture(morphedImages[i]), morphedImages[i].cols, morphedImages[i].rows);
-
-				morphedImages.clear();
+				for (int i = 0; i < steps + 1; i++)
+					morphedTextures.emplace_back(-1, 0, 0);
+				for (int step = 0; step <= steps; step++)
+					morphJobs[step] = std::async(std::launch::async, generateMorph, sourceImage, targetImage, step);
 				morphPerf = std::time(nullptr) - start;
 			}
 
@@ -308,15 +363,45 @@ int main() {
 				readEdges();
 			if (ImGui::Button("Save"))
 				writeEdges(sourcePathBuffer, targetPathBuffer);
+			/*if (ImGui::Button("generate features")) {
+				generateFeatures(sourceImage, 0);
+				generateFeatures(targetImage, 1);
+			}*/
 
 			ImGui::End();
 		}
 
+		int ready = 0;
+		if (morphing == true) {
+			for (int i = 0; i < morphJobs.size(); i++) {
+				if (!morphJobs[i].valid()) {
+					ready++;
+					continue;
+				}
+				auto status = morphJobs[i].wait_for(std::chrono::seconds(0));
+				if (status == std::future_status::ready) {
+					ready++;
+					cv::Mat image = morphJobs[i].get();
+					morphedTextures[i] = std::make_tuple(createTexture(image), image.cols, image.rows);
+					morphJobs[i] = std::future<cv::Mat>();
+				}
+			}
+			if (ready == steps + 1)
+				morphing = false;
+		}
+
 		{
 			ImGui::Begin("Result");
-			ImGui::Text("Morphing complete in %i", morphPerf);
-			int imageIndex = (std::time(nullptr) - startTime) % (steps + 1);
-			if (imageIndex < morphedTextures.size()) {
+			if (morphPerf)
+				ImGui::Text("Morphing complete in %i", morphPerf);
+
+			auto endTime = std::chrono::steady_clock::now();
+			double frame = frames(endTime - startTime).count();
+			frame = (int)frame % (FPS + 1);
+			int imageIndex = std::abs(frame - FPS / 2) * ((double)(morphedTextures.size() - 1) / (FPS / 2));
+
+			//std::cout << frame << " " << imageIndex << std::endl;
+			if (imageIndex < morphedTextures.size() && std::get<0>(morphedTextures[imageIndex]) != -1) {
 				ImVec2 winSize = ImGui::GetWindowSize();
 				double scaleFactor = std::min(winSize.y / std::get<2>(morphedTextures[imageIndex]), winSize.x / std::get<1>(morphedTextures[imageIndex]));
 				ImGui::Image(
@@ -327,8 +412,29 @@ int main() {
 			ImGui::End();
 		}
 
-		if (ImGui::IsKeyPressed(ImGuiKey_G))
-			editHandle = !editHandle;
+		if (ImGui::IsKeyPressed(ImGuiKey_A)) {
+			addHandle = !addHandle;
+			if (addHandle) {
+				eraseHandle = false;
+			}
+			else {
+				if (sourceMarkers.size() > 0 && sourceMarkers.back().drawing)
+					sourceMarkers.pop_back();
+				if (targetMarkers.size() > 0 && targetMarkers.back().drawing)
+					targetMarkers.pop_back();
+			}
+		}
+		if (ImGui::IsKeyPressed(ImGuiKey_E)) {
+			eraseHandle = !eraseHandle;
+			if (eraseHandle)
+			{
+				addHandle = false;
+				if (sourceMarkers.size() > 0 && sourceMarkers.back().drawing)
+					sourceMarkers.pop_back();
+				if (targetMarkers.size() > 0 && targetMarkers.back().drawing)
+					targetMarkers.pop_back();
+			}
+		}
 
 		//Render
 		ImGui::Render();
