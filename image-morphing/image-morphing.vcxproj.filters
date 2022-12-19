@@ -42,6 +42,9 @@
     <ClCompile Include="src\imgui\imgui_stdlib.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\dlib\source.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\imgui\imstb_truetype.h">

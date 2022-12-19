@@ -2,6 +2,13 @@
 #include <GLFW/glfw3.h>
 #include <opencv2/opencv.hpp>
 
+#include <dlib/opencv.h>
+#include <dlib/image_io.h>
+#include <dlib/gui_widgets.h>
+#include <dlib/image_processing.h>
+#include <dlib/image_processing/frontal_face_detector.h>
+#include <dlib/image_processing/render_face_detections.h>
+
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_glfw.h"
 #include "imgui/imgui_impl_opengl3.h"
@@ -279,17 +286,59 @@ cv::Mat generateMorph(const cv::Mat &sourceImage, const cv::Mat &targetImage, co
 	return finalMorph;
 }
 
-void generateFeatures(cv::Mat &image, int index) {
-	auto fast = cv::FastFeatureDetector::create();
-	fast->setThreshold(30);
-	std::vector<cv::KeyPoint> keypoints;
-	fast->detect(image, keypoints);
+void generateFeatures(cv::Mat &image, std::vector<Edge> &markers, int index) {
+	markers.clear();
+	std::cout << "generating \n";
+	cv::Mat image2 = image.clone();
+	
+	dlib::frontal_face_detector detector = dlib::get_frontal_face_detector();
+	
+	dlib::shape_predictor shape_model;
+	dlib::deserialize("shape_predictor_68_face_landmarks.dat") >> shape_model;
 
-	cv::Mat image2; 
-	cv::drawKeypoints(image, keypoints, image2, cv::Scalar(1, 0, 0));
-	std::cout << "threshold" << fast->getThreshold() << std::endl;
+	dlib::array2d<dlib::bgr_pixel> dlib_image;
+	dlib::assign_image(dlib_image, dlib::cv_image<dlib::bgr_pixel>(image2));
+	std::pair<int, int> oldSize = std::make_pair(dlib_image.nc(), dlib_image.nr());
+	dlib::pyramid_up(dlib_image);
+	std::pair<int, int> newSize = std::make_pair(dlib_image.nc(), dlib_image.nr());
 
-	cv::imwrite("features" + std::to_string(index) +".png", image2);
+	std::vector<dlib::rectangle> detected_faces = detector(dlib_image);
+	
+	int number_of_detected_faces = detected_faces.size();
+	std::cout << "Number of detected faces : " << number_of_detected_faces << std::endl;
+
+	std::vector<dlib::full_object_detection> shapes;
+	int rect_x, rect_y, rect_w, rect_h;
+	//dlib::image_window win;
+	std::cout << "prev size =" << oldSize.first << " " << oldSize.second 
+		<< "newSize = " << newSize.first << " " << newSize.second << std::endl;
+	for (int i = 0; i < number_of_detected_faces; i++) {
+		double scaleFactor = std::min((double)oldSize.first / newSize.first, (double)oldSize.second / oldSize.second);
+		std::cout << "scale factor =" << scaleFactor << std::endl;
+		dlib::full_object_detection shape = shape_model(dlib_image, detected_faces[i]);
+		shapes.push_back(shape);
+
+		std::cout << "number of parts = " << shape.num_parts() << std::endl;
+		rect_x = detected_faces[i].left();
+		rect_y = detected_faces[i].top();
+		rect_w = detected_faces[i].right() - rect_x;
+		rect_h = detected_faces[i].bottom() - rect_y;
+		std::cout << "face " << rect_x << " " << rect_y << " " << rect_w << " " << rect_h << std::endl;
+		cv::Rect face_rectangle(rect_x*scaleFactor, rect_y*scaleFactor, rect_w*scaleFactor, rect_h*scaleFactor);
+
+		cv::rectangle(image2, face_rectangle, cv::Scalar(0, 255, 0), 3, 8, 0);
+
+		for (int j = 0; j < 68; j++) {
+			std::cout << "point " << shape.part(j).x() * scaleFactor << " " << shape.part(j).y() * scaleFactor << std::endl;
+			cv::circle(image2, cv::Point(shape.part(j).x() * scaleFactor, shape.part(j).y() * scaleFactor), 2, cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
+		}
+		for (int j = 0; j < 68; j+=2) {
+			markers.emplace_back(Pixel(shape.part(j).x() * scaleFactor, shape.part(j).y() * scaleFactor),
+					Pixel(shape.part(j+1).x() * scaleFactor, shape.part(j+1).y() * scaleFactor)
+				,false);
+		}
+	}
+	cv::imwrite("feature" + std::to_string(index) + ".png", image2);
 }
 
 int main() {
@@ -363,10 +412,10 @@ int main() {
 				readEdges();
 			if (ImGui::Button("Save"))
 				writeEdges(sourcePathBuffer, targetPathBuffer);
-			/*if (ImGui::Button("generate features")) {
-				generateFeatures(sourceImage, 0);
-				generateFeatures(targetImage, 1);
-			}*/
+			if (ImGui::Button("generate features")) {
+				generateFeatures(sourceImage, sourceMarkers, 0);
+				generateFeatures(targetImage, targetMarkers, 1);
+			}
 
 			ImGui::End();
 		}
