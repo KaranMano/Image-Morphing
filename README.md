@@ -9,4 +9,7 @@ Image morphing using the Beier-Neely algorithm along with auto correspondence.
 - Generating Intermediate Frames forward transform
 - Generating reverse transform
 - Cross Fading between intermediate frames of both direction
-- Automatic correspondence-maarker generation
+- Multi-threading for morph computation
+- Editable correspondence markers
+- Automatic correspondence-marker generation
+- Image Morphing using correspondence markers
