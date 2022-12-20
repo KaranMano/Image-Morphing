@@ -37,16 +37,35 @@ std::vector<std::tuple<int, int, int>> morphedTextures;
 std::vector<std::future<cv::Mat>> morphJobs(steps + 1);
 
 inline ImVec2 conv(const cv::Point2d &p) {
+	/*
+		Converts Point2d of OpenCV to
+		ImVec2 of ImGui for line drawing over the image
+	*/
+
 	return ImVec2(p.x, p.y);
 }
 
 cv::Point2d perp(const cv::Point2d &v) {
+	/*
+		Calculates the perpendicular vector of a given vector 
+		(by taking cross product with +z)
+	*/ 
+
 	cv::Point3d planePerp(0, 0, 1);
 	cv::Point3d p = cv::Point3d(v.x, v.y, 0).cross(planePerp);
 	return cv::Point2d(p.x, p.y);
 }
 
 void writeEdges(std::string sourcePath, std::string targetPath) {
+	/*
+		Writes edges from applicaiton to files:
+		- "source.edges"
+		- "target.edges"
+		Edge data stored in format:
+		Hx Hy Tx Ty displayBool
+		Eg: 93 79 94 161 0
+	*/
+
 	std::ofstream sourceLog("./source.edges");
 	std::ofstream targetLog("./target.edges");
 
@@ -59,6 +78,11 @@ void writeEdges(std::string sourcePath, std::string targetPath) {
 }
 
 void readEdges() {
+	/*
+		Reads edge data from files "source.edges" and "target.edges" and
+		stores them in two respective vectors
+	*/
+
 	targetMarkers.clear();
 	sourceMarkers.clear();
 	std::ifstream sourceLog("./source.edges");
@@ -80,6 +104,10 @@ void readEdges() {
 }
 
 void printEdges() {
+	/*
+		Printing edge data to console
+	*/
+
 	std::cout << "sourceEdges: \n";
 	for (const auto &edge : sourceMarkers)
 		std::cout << edge << std::endl;
@@ -90,6 +118,11 @@ void printEdges() {
 }
 
 GLuint createTexture(cv::Mat &image) {
+	/*
+		Creates texture for a given image to be displayed by OpenGL
+		Returns GL unsigned int which identifies a textures
+	*/
+
 	GLuint texture;
 	glGenTextures(1, &texture);
 	cv::cvtColor(image, image, cv::COLOR_BGR2RGBA);
@@ -103,12 +136,24 @@ GLuint createTexture(cv::Mat &image) {
 }
 
 void loadImage(cv::Mat &image, GLuint &texture, const std::string &path) {
+	/*
+		Loads an image as an OpenCV image matrix from given path
+		Calls createTexture method to create and load it's texture
+	*/
+
 	image = cv::imread(path, cv::IMREAD_COLOR);
 	if (!image.empty())
 		texture = createTexture(image);
 }
 
 void loadImageWindow(cv::Mat &image, std::string &buffer, GLuint &texture, const std::string &title) {
+	/*
+		Creates an ImGui window which displays a given Image 
+		window also has input for image path and two buttons:
+		- submit (submits image path, loads image using that path)
+		- clear (clears correspondence markers if any)
+	*/
+
 	ImGui::Begin(title.c_str());
 	ImGui::InputText(("input##" + title).c_str(), &buffer);
 
@@ -120,6 +165,10 @@ void loadImageWindow(cv::Mat &image, std::string &buffer, GLuint &texture, const
 }
 
 void displayImage(cv::Mat image, GLuint texture, std::string title) {
+	/*
+		Displays a given image with the correspondence marker lines
+		Calls adding and erasing methods to erase and add correspondence markers
+	*/
 	std::vector<Edge> *edges = nullptr;
 	edges = (title == "source image") ? &sourceMarkers : &targetMarkers;
 
@@ -153,7 +202,10 @@ void displayImage(cv::Mat image, GLuint texture, std::string title) {
 		if (eraseHandle) {
 			ImGui::GetWindowDrawList()->AddRect(topLeft, bottomRight, IM_COL32(255, 0, 0, 255), 0, 0, 5);
 		}
-
+		
+		/*
+			Renders the edges on the given image
+		*/
 		for (auto &edge : *edges) {
 			Pixel tail = edge.tail * scaleFactor + topLeft;
 			Pixel head = (edge.drawing) ? Pixel(ImGui::GetMousePos()) : edge.head * scaleFactor + topLeft;
@@ -211,11 +263,22 @@ void displayImage(cv::Mat image, GLuint texture, std::string title) {
 }
 
 void clampToImage(cv::Point2d &p, const cv::Mat &image) {
+	/*
+		If the mapping of a target pixel is outside the bounds of 
+		the inital image, this function clamps that to the value of the closest 
+		edge pixel of the source image to that.
+	*/
+
 	p.x = std::clamp((int)p.x, 0, image.cols - 1);
 	p.y = std::clamp((int)p.y, 0, image.rows - 1);
 }
 
 inline cv::Point2d generateIntermediatePoint(const cv::Point2d &source, const cv::Point2d &dest, const double &step) {
+	/*
+		Generation of intermediate point for interpolating
+		the Head and Tail of the Correspondence marker pairs
+	*/
+
 	return (dest - source) * step + source;
 }
 
@@ -225,16 +288,30 @@ cv::Mat morphImage(const cv::Mat &sourceImage,
 	const std::vector<Edge> targetEdges,
 	const double &step)
 {
+	/*
+		Image morphing for a given Source Image to a given Target image
+	*/
+
 	cv::Mat destImage(sourceImage.rows, sourceImage.cols, sourceImage.type(), cv::Scalar(0, 0, 0));
 	double a = 10, b = 1.5, p = 0.2;
 	//! gpu optimisation maybe
 	for (int col = 0; col < targetImage.cols; col++) {
 		for (int row = 0; row < targetImage.rows; row++) {
+			/*
+				Runs through every pixel to calculate the X in
+				source Image for a given X' in destination image
+			*/
+
 			cv::Point2d destX(col, row);
 			cv::Point2d dispSum(0, 0);
 			double weightSum = 0;
 
 			for (int i = 0; i < targetEdges.size(); i++) {
+				/*
+					Calculates the displacement for every correspondence line pair 
+					Multiplies weight for each line pair with the X Value
+				*/
+
 				cv::Point2d destP = targetEdges[i].head;
 				cv::Point2d destQ = targetEdges[i].tail;
 				cv::Point2d sourceP = sourceEdges[i].head;
@@ -271,6 +348,13 @@ cv::Mat morphImage(const cv::Mat &sourceImage,
 }
 
 cv::Mat generateMorph(const cv::Mat &sourceImage, const cv::Mat &targetImage, const int &step) {
+	/*
+		Calls the morphing function to generate a single frame and
+		adds processing for crossfading with the destination morph
+		Saves the morph to an image file indxed as morph[i] where i is
+		the index of the frame
+	*/
+
 	cv::Mat finalMorph;
 	if (step == steps)
 		finalMorph = targetImage;
@@ -287,6 +371,12 @@ cv::Mat generateMorph(const cv::Mat &sourceImage, const cv::Mat &targetImage, co
 }
 
 void generateFeatures(cv::Mat &image, std::vector<Edge> &markers, int index) {
+	/*
+		Detects face using Dlib's face_feature_detection and
+		generates the correspondence markers for a given image which has a face in it
+		68 points are generated for a given face
+	*/
+
 	markers.clear();
 	std::cout << "generating \n";
 	cv::Mat image2 = image.clone();
@@ -391,6 +481,15 @@ int main() {
 		displayImage(targetImage, targetTexture, "target image");
 
 		{
+			/*
+				Options ImGui Window	
+				Displays number of correspondence markers in each image
+				Contains buttons for: 
+				- starting morph
+				- loading edge data
+				- starting autocorrespondence generation
+			*/
+
 			ImGui::Begin("Options");
 
 			ImGui::Text("source edges: %i", sourceMarkers.size());
@@ -440,6 +539,10 @@ int main() {
 		}
 
 		{
+			/*
+				Result imgui window
+			*/
+
 			ImGui::Begin("Result");
 			if (morphPerf)
 				ImGui::Text("Morphing complete in %i", morphPerf);
