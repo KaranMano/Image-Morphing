@@ -28,9 +28,9 @@ The usage of the attributes is self-explanatory. The correspondence markers are 
 ## Transforming with one line pair
 A pair of lines (one defined relative to the source image, the other defined relative to the destination image) defines a mapping from one image to the other[1]. 
 We first create an empty image with the same image type and dimensions as the source image. This image will act as the destination image i.e. the output image after morphing the source image. We now iterate over every pixel of this empty image and find the corresponding pixel value in the source image using the following equations:
+![single line pair](./Media/one-line-pair.png)
 <br>
 `u = ((X - P) . (Q - P)) / ||Q - P||^2`
 <br>
 `v = ((X - P) . perpendicular(Q - P)) / ||Q - P||`
-
 
