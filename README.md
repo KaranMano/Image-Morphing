@@ -84,7 +84,7 @@ To create the final morph from one image to another, we need to not just morph f
 <img src="./Media/inbetween-frame.png" height="350" />
 
 Below is the final morphed image sequence:
-<img src="./Media/human-face-morph-animation.png" height="150" />
+<img src="./Media/human-face-morph-animation.png" width="100%" />
 
 ## Computational Optimizations
 Morphing is a computationally expensive task especially for images with many correspondence markers, since we have to calcuate the contribution of each marker for every pixel in the source as well as destination images, and do this multiple times for the in-between frames. Hence we used multithreading to generate different morph steps.
