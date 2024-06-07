@@ -5,6 +5,24 @@ The main objective of the project is to morph a given source image into a given 
 
 <img src="./Media/final-morph-video.gif" height="350"/>
 
+#  Cloning
+The project makes use of git submodules. To make sure that all submodules are cloned correctly use the following set of commands.
+```
+  git clone https://github.com/KaranMano/Image-Morphing
+  cd .\Image-Morphing\
+  git submodule update --init --recursive
+```
+
+# Building
+The project uses cmake for make file generation. To build the application make sure all submodules have been cloned(see [cloning](#cloning)). The following set of commands can then be used to generate the required make files for building the application.
+
+```
+  mkdir build
+  cd build
+  cmake ..
+```
+ After the above commands have completed successfully you can use the generated make files or .sln file, depending upon the operating system and the generator selected, to build the application.
+
 # Implementation
 We divided our implementation into the following steps:
 - Take user input for both the source and the target images
