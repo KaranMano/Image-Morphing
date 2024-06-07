@@ -1,14 +1,2 @@
-x64/
-Debug/
-Dependencies/*
-.vs/
-enc_temp_folder/
-
-image-morphing/*.edges
-image-morphing/*.vcxproj.user
-image-morphing/x64/
-image-morphing/Debug/
-image-morphing/*.jpeg
-image-morphing/*.jpg
-image-morphing/*.png
-image-morphing/*.dat
+build/
+data/

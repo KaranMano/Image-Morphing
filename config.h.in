@@ -1,0 +1,1 @@
+#cmakedefine INI_PATH @INI_PATH@
