@@ -3,7 +3,7 @@ The main objective of the project is to morph a given source image into a given 
 
 ### Below is a sample input and output of the application:
 
-<img src="./Media/final-morph-video.gif" height="350"/>
+<img src="./Media/final-morph-video.gif" width="100%"/>
 
 #  Cloning
 The project makes use of git submodules. To make sure that all submodules are cloned correctly use the following set of commands.
