@@ -1,7 +1,6 @@
 #include "image.h"
 
 void Image::deleter(unsigned char *ptr) { 
-	std::cout << "cleaning\n";
 	free(ptr); 
 }
 

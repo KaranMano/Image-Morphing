@@ -20,7 +20,7 @@
 
 class Image {
 private:
-	static void Image::deleter(unsigned char *ptr);
+	static void deleter(unsigned char *ptr);
 	std::shared_ptr<unsigned char[]> m_bitmap;
 	int m_width, m_height, m_channels;
 

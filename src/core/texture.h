@@ -8,7 +8,7 @@ class Image;
 class Texture {
 private:
 	std::shared_ptr<GLuint> m_texture;
-	static void Texture::deleter(GLuint *ptr);
+	static void deleter(GLuint *ptr);
 
 public:
 	Texture();

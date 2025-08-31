@@ -64,8 +64,8 @@ int main() {
 		{
 			ImGui::Begin("Options");
 
-			ImGui::Text("source edges: %i", sourceEdges.size());
-			ImGui::Text("target edges: %i", targetEdges.size());
+			ImGui::Text("source edges: %lu", sourceEdges.size());
+			ImGui::Text("target edges: %lu", targetEdges.size());
 
 			if (!morphing && ImGui::Button("Morph")) {
 				int start = std::time(nullptr);
@@ -87,8 +87,8 @@ int main() {
 				loadEdges(targetEdges, "../examples/target.edges");
 			}
 			if (ImGui::Button("Save")){
-				saveEdges(sourceEdges, sourcePathBuffer);
-				saveEdges(targetEdges, targetPathBuffer);
+				saveEdges(sourceEdges, "../examples/source.edges");
+				saveEdges(targetEdges, "../examples/target.edges");
 			}
 			// if (ImGui::Button("generate features")) {
 			// 	generateFeatures(sourceImage, sourceMarkers, 0);
