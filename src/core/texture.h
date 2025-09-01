@@ -20,6 +20,7 @@ public:
 	Texture& operator=(Texture&& other);
 	bool empty() const;
 	GLuint get() const;
+	void set(GLuint texID);
 	friend void clear(Texture &texture);
 	friend void load(Texture &texture, const Image& image);
 };

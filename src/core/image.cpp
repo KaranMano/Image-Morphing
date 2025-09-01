@@ -158,3 +158,7 @@ void write(const Image &image, const std::string& path){
 void clear(Image &image) {
 	image.m_bitmap.reset();
 }
+
+unsigned char* Image::get() const{
+	return m_bitmap.get();
+}

@@ -1,0 +1,107 @@
+#version 430
+
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+layout(std430, binding = 0) buffer sourceEdgeBuffer {
+    float data[];
+} seb;
+layout(std430, binding = 1) buffer targetEdgeBuffer {
+    float data[];
+} teb;
+layout(rgba8, binding = 2) uniform image2D sourceImage;
+layout(rgba8, binding = 3) uniform image2D targetImage;
+layout(rgba8, binding = 4) uniform image2DArray outImages;
+
+float a = 10;
+float b = 1.5; 
+float p = 0.2;
+vec2 perp(vec2 val){
+    return vec2(val.y, -val.x);
+}
+
+vec4 calc(
+    vec2 destX, bool backward, 
+    float alpha
+) {
+    vec2 dispSum = vec2(0, 0);
+    float weightSum = 0;
+
+    for (int i = 0; i < 43; i++) {
+        vec2 destP = backward ? 
+            vec2(teb.data[i * 4 + 0], teb.data[i * 4 + 1]) 
+            : 
+            vec2(seb.data[i * 4 + 0], seb.data[i * 4 + 1]);
+        vec2 destQ = backward ? 
+            vec2(teb.data[i * 4 + 2], teb.data[i * 4 + 3]) 
+            : 
+            vec2(seb.data[i * 4 + 2], seb.data[i * 4 + 3]);
+        vec2 sourceP = backward ? 
+            vec2(seb.data[i * 4 + 0], seb.data[i * 4 + 1]) 
+            : 
+            vec2(teb.data[i * 4 + 0], teb.data[i * 4 + 1]);
+        vec2 sourceQ = backward ? 
+            vec2(seb.data[i * 4 + 2], seb.data[i * 4 + 3]) 
+            : 
+            vec2(teb.data[i * 4 + 2], teb.data[i * 4 + 3]);
+
+        destP = mix(sourceP, destP, alpha);
+        destQ = mix(sourceQ, destQ, alpha);
+
+        float u = dot(destX - destP, destQ - destP) / (length(destQ - destP) * length(destQ - destP));
+        float v = dot(destX - destP, perp(destQ - destP)) / length(destQ - destP);
+
+        vec2 sourceX = sourceP + u * (sourceQ - sourceP) + (v * perp(sourceQ - sourceP)) / length(sourceQ - sourceP);
+        vec2 disp = sourceX - destX;
+
+        float dist;
+        if (u >= 1)
+            dist = length(destX - destQ);
+        else if (u <= 0)
+            dist = length(destX - destP);
+        else
+            dist = abs(v);
+
+        float weight = pow(pow(length(destQ - destP), p) / (a + dist), b);
+
+        weightSum += weight;
+        dispSum += disp * weight;
+    }
+    vec2 final = destX + dispSum / weightSum;
+    final.xy = clamp(final, 0.0, 449.0);
+    return backward ? 
+        imageLoad(sourceImage, ivec2(final.x, final.y))
+        :
+        imageLoad(targetImage, ivec2(final.x, final.y));
+}
+
+void main() {
+    float alpha = float(gl_GlobalInvocationID.z) / float(gl_NumWorkGroups.z - 1);
+    if (gl_GlobalInvocationID.z == 0) {
+        imageStore(
+            outImages, 
+            ivec3(gl_GlobalInvocationID), 
+            imageLoad(sourceImage, ivec2(gl_GlobalInvocationID.xy)));
+    }
+    else if (gl_GlobalInvocationID.z == (gl_NumWorkGroups.z - 1)) {
+        imageStore(
+            outImages, 
+            ivec3(gl_GlobalInvocationID), 
+            imageLoad(targetImage, ivec2(gl_GlobalInvocationID.xy)));
+    }
+    else {
+        vec4 color = mix( 
+            calc(
+                gl_GlobalInvocationID.xy, 
+                true, 
+                alpha),
+            calc(
+                gl_GlobalInvocationID.xy, 
+                false, 
+                1.0 - alpha),
+            alpha
+        );
+        imageStore(
+            outImages, 
+            ivec3(gl_GlobalInvocationID), 
+            color);
+    }
+}
