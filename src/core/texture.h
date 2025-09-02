@@ -8,7 +8,7 @@ class Image;
 class Texture {
 private:
 	std::shared_ptr<GLuint> m_texture;
-	static void Texture::deleter(GLuint *ptr);
+	static void deleter(GLuint *ptr);
 
 public:
 	Texture();
@@ -20,6 +20,7 @@ public:
 	Texture& operator=(Texture&& other);
 	bool empty() const;
 	GLuint get() const;
+	void set(GLuint texID);
 	friend void clear(Texture &texture);
 	friend void load(Texture &texture, const Image& image);
 };
