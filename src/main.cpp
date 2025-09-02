@@ -247,7 +247,7 @@ int main() {
             morphedImages[step] = image;
           }
 
-          glDeleteBuffers(1, &outputImageArray);
+          glDeleteTextures(1, &outputImageArray);
           glDeleteBuffers(1, &sourceSSBO);
           glDeleteBuffers(1, &targetSSBO);
         }
