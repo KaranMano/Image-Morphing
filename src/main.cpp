@@ -2,43 +2,41 @@
 #include "utils.h"
 #include <GL/glext.h>
 #include <chrono>
+#include <future>
 #include <fstream>
 #include <string>
+#include <iostream>
 
 #define FPS 16
-void checkGLerror(){
-      GLenum error = glGetError();
-      while(error != GL_NO_ERROR)
-      {
+void checkGLerror() {
+  GLenum error = glGetError();
+  while (error != GL_NO_ERROR) {
 
+    switch (error) {
+    case (GL_NO_ERROR):
 
-         switch(error){
-            case(GL_NO_ERROR):
-               
-               break;
-            case(GL_INVALID_ENUM):
-               std::cout <<  ": GL_INVALID_ENUM";
-               break;
-            case(GL_INVALID_VALUE):
-               std::cout <<  ": GL_INVALID_VALUE";
-               break;
-            case(GL_INVALID_OPERATION):
-               std::cout <<  ": GL_INVALID_OPERATION";
-               break;
-            case(GL_INVALID_FRAMEBUFFER_OPERATION):
-               std::cout <<  ": GL_INVALID_FRAMEBUFFER_OPERATION";
-               break;
-            case(GL_OUT_OF_MEMORY):
-               std::cout <<  ": GL_OUT_OF_MEMORY";
-               break;
-            default:
-               std::cout <<  ": Unknown error!";
-
-         }
-         error = glGetError();
-
-      }
-   }
+      break;
+    case (GL_INVALID_ENUM):
+      std::cout << ": GL_INVALID_ENUM";
+      break;
+    case (GL_INVALID_VALUE):
+      std::cout << ": GL_INVALID_VALUE";
+      break;
+    case (GL_INVALID_OPERATION):
+      std::cout << ": GL_INVALID_OPERATION";
+      break;
+    case (GL_INVALID_FRAMEBUFFER_OPERATION):
+      std::cout << ": GL_INVALID_FRAMEBUFFER_OPERATION";
+      break;
+    case (GL_OUT_OF_MEMORY):
+      std::cout << ": GL_OUT_OF_MEMORY";
+      break;
+    default:
+      std::cout << ": Unknown error!";
+    }
+    error = glGetError();
+  }
+}
 
 bool addHandle = false, morphing = false, eraseHandle = false, useGpu = false;
 int steps = 10;
@@ -150,6 +148,16 @@ int main() {
     displayImage(targetImage, targetTexture, targetEdges, "target image",
                  addHandle, eraseHandle);
 
+    if (errorLastFrame) {
+      ImGui::OpenPopup("Error");
+      errorLastFrame = false;
+    }
+    if (ImGui::BeginPopup("Error")) {
+      ImGui::Text("An error ocurred!");
+      ImGui::Text("Please try again with different options.");
+      ImGui::EndPopup();
+    }
+
     {
       ImGui::Begin("Options");
 
@@ -207,12 +215,12 @@ int main() {
           glBindTexture(GL_TEXTURE_2D_ARRAY, outputImageArray);
           glTexStorage3D(GL_TEXTURE_2D_ARRAY, 1, GL_RGBA8, sourceImage.width(),
                          sourceImage.height(), steps);
-						 checkGLerror();
+          checkGLerror();
           glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER,
                           GL_LINEAR);
           glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER,
                           GL_LINEAR);
-						  checkGLerror();
+          checkGLerror();
           glBindImageTexture(4, outputImageArray, 0, GL_TRUE, 0, GL_WRITE_ONLY,
                              GL_RGBA8);
 
@@ -229,10 +237,12 @@ int main() {
 
           for (int step = 0; step < steps; step++) {
             Image image(sourceImage.width(), sourceImage.height(), 4);
-            glGetTextureSubImage(
-                outputImageArray, 0, 0, 0, step, sourceImage.width(),
-                sourceImage.height(), 1, GL_RGBA, GL_UNSIGNED_BYTE,
-                sourceImage.width() * sourceImage.height() * 4 * sizeof(unsigned char), image.get());
+            glGetTextureSubImage(outputImageArray, 0, 0, 0, step,
+                                 sourceImage.width(), sourceImage.height(), 1,
+                                 GL_RGBA, GL_UNSIGNED_BYTE,
+                                 sourceImage.width() * sourceImage.height() *
+                                     4 * sizeof(unsigned char),
+                                 image.get());
             checkGLerror();
             morphedImages[step] = image;
           }
@@ -277,7 +287,7 @@ int main() {
         }
       }
       morphPerf = std::chrono::high_resolution_clock::now() - morphStart;
-	  morphing = false;
+      morphing = false;
     }
 
     {
@@ -329,7 +339,6 @@ int main() {
           targetEdges.pop_back();
       }
     }
-
     // Render
     ImGui::Render();
     int display_w, display_h;
@@ -341,5 +350,6 @@ int main() {
     glfwSwapBuffers(window);
   }
   glfwTerminate();
+
   return 0;
 }

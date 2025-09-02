@@ -44,7 +44,7 @@ public:
 	unsigned char* get() const;
 	
 	friend void clear(Image &image);
-	friend void load(Image &image, const std::string &path);
-	friend void write(const Image &image, const std::string& path);
+	friend int load(Image &image, const std::string &path);
+	friend int write(const Image &image, const std::string& path);
 	friend void load(Texture &texture, const Image& image);
 };

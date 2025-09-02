@@ -10,18 +10,14 @@
 #include <imgui_impl_opengl3.h>
 #include <imgui_stdlib.h>
 
-#include <iostream>
-#include <algorithm>
-#include <utility>
 #include <vector>
-#include <fstream>
 #include <cmath>
-#include <future>
-#include <chrono>
 
 #include "core/image.h"
 #include "core/point.h"
 #include "core/edge.h"
+
+extern bool errorLastFrame;
 
 void clampToImage(Point &p, const Image &image);
 inline Point generateIntermediatePoint(const Point &source, const Point &dest, const float &step);

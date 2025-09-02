@@ -1,4 +1,6 @@
 #include "image.h"
+#include <exception>
+#include <stdexcept>
 
 void Image::deleter(unsigned char *ptr) { 
 	free(ptr); 
@@ -137,7 +139,7 @@ int Image::width() const noexcept { return m_width; }
 int Image::height() const noexcept { return m_height; }
 int Image::channels() const noexcept { return m_channels; }
 
-void load(Image &image, const std::string &path) {
+int load(Image &image, const std::string &path) {
 	if (stbi_info(path.c_str(), &image.m_width, &image.m_height, &image.m_channels)) {
 		image.m_bitmap.reset(
 			stbi_load(path.c_str(), &image.m_width, &image.m_height, &image.m_channels, 4), 
@@ -146,14 +148,16 @@ void load(Image &image, const std::string &path) {
 		/*if (image.m_bitmap.get() == nullptr)
 			throw "Failed to load image";*/
 		image.m_channels = 4;
+		return 0;
 	}
 	else {
-		throw "Unsupported file";
+		return -1;
 	}
 }
-void write(const Image &image, const std::string& path){
+int write(const Image &image, const std::string& path){
 	if (!stbi_write_png(path.c_str(), image.m_width, image.m_height, image.m_channels, image.m_bitmap.get(), 4))
-		throw "Failed to write image to disk";
+		return -1;
+	return 0;
 }
 void clear(Image &image) {
 	image.m_bitmap.reset();

@@ -1,5 +1,9 @@
 #include "utils.h"
 
+#include <iostream>
+
+bool errorLastFrame = false;
+
 void clampToImage(Point &p, const Image &image) {
 	p.x = std::clamp((int)p.x, 0, image.width() - 1);
 	p.y = std::clamp((int)p.y, 0, image.height() - 1);
@@ -21,7 +25,7 @@ void loadImageWindow(
 
 	if (ImGui::Button(("submit##" + title).c_str())) {
 		try {
-			load(image, buffer);
+			errorLastFrame = load(image, buffer) < 0;
 			load(texture, image);
 		}
 		catch (std::string errorMessage) {
@@ -104,7 +108,7 @@ Image generateMorph(
 		Image destMorph = morphImage(sourceImage, targetImage, sourceEdges, targetEdges, alpha);
 		finalMorph = (alpha)* sourceMorph + (1 - alpha)* destMorph;
 	}
-	write(finalMorph, "morph" + std::to_string(step) + ".png");
+	errorLastFrame = write(finalMorph, "morph" + std::to_string(step) + ".png") < 0;
 	return finalMorph;
 }
 
